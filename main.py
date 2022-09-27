@@ -1,7 +1,18 @@
+import os
 import re
+import sys
+from enum import Flag, auto
 from typing import Tuple
 
+from graphviz import Digraph
 from sql_metadata import Parser
+
+
+class QueryType(Flag):
+    SELECT = auto()
+    DELETE = auto()
+    UPDATE = auto()
+    INSERT = auto()
 
 
 def remove_impurities(impure_query: str) -> str:
@@ -16,7 +27,7 @@ def remove_impurities(impure_query: str) -> str:
 def extract_tables(query: str) -> Tuple[list[str], str]:
     pure_query = remove_impurities(query)
     tables = Parser(pure_query).tables
-    if is_select_query(pure_query):
+    if guess_query_type(pure_query) == QueryType.SELECT:
         return tables, ""
     elif len(tables) == 0:
         return [], ""
@@ -26,27 +37,55 @@ def extract_tables(query: str) -> Tuple[list[str], str]:
         return tables[1:], tables[0]
 
 
-def is_select_query(query: str) -> bool:
-    result = re.search(
-        r"(DELETE|UPDATE|INSERT)", query, flags=re.DOTALL | re.IGNORECASE
-    )
-    return result is None
+def guess_query_type(query: str) -> QueryType:
+    if re.search(r"(DELETE)", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+        return QueryType.DELETE
+    elif re.search(r"(UPDATE)", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+        return QueryType.UPDATE
+    elif re.search(r"(INSERT)", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+        return QueryType.INSERT
+    else:
+        return QueryType.SELECT
+
+
+def select_color(query_type: QueryType) -> str:
+    if query_type == QueryType.DELETE:
+        return "#1b9e77"
+    elif query_type == QueryType.UPDATE:
+        return "#d95f02"
+    elif query_type == QueryType.INSERT:
+        return "#e6ab02"
+    else:
+        return "#e7298a"
 
 
 def main():
-    filess = ["file1.sql"]
+    # files = ["file1.sql"]
+    sqlfiles = sys.argv[1:]
+    dg = Digraph()
+    dg.attr("graph", rankdir="LR")
 
-    queries = []
-    for file in filess:
-        with open(file, "r", encoding="utf-8") as f:
-            sq = f.read().split(";")
-            del sq[-1]  # empty
-            queries.extend(sq)
+    for sqlfile in sqlfiles:
+        fnm = os.path.splitext(os.path.basename(sqlfile))[0]
+        with open(sqlfile, "r", encoding="utf-8") as f:
+            queries = f.read().split(";")
+            del queries[-1]  # empty
 
-    for query in queries:
-        from_tables, to_table = extract_tables(query)
-        print(from_tables)
-        print(to_table)
+            for query in queries:
+                query_type = guess_query_type(query)
+                from_tables, to_table = extract_tables(query)
+                dg.node(to_table)
+
+                for from_table in from_tables:
+                    dg.node(from_table)
+                    dg.edge(
+                        tail_name=from_table,
+                        head_name=to_table,
+                        label=fnm,
+                        color=select_color(query_type),
+                    )
+
+    dg.render("./dgraph", view=True, format="svg")
 
 
 if __name__ == "__main__":
