@@ -100,6 +100,33 @@ def query_gen(files: List[str]) -> Generator[Tuple[str, str, QueryType], None, N
                 yield basename, query, query_type
 
 
+def draw_diagram(
+    from_tables: List[str], to_table: str, query_type: QueryType, query_file: str
+):
+    dg.node(
+        to_table,
+        shape="cylinder",
+        color="white" if query_type == QueryType.SELECT else "black",
+    )
+    dg.node(query_file, shape="note")
+    dg.edge(
+        tail_name=query_file,
+        head_name=to_table,
+        color=select_color(query_type),
+    )
+    for from_table in from_tables:
+        dg.node(from_table, shape="cylinder")
+        dg.edge(
+            tail_name=from_table,
+            head_name=query_file,
+            color=select_color(query_type),
+        )
+
+
+dg = Digraph()
+dg.attr("graph", rankdir="LR")
+
+
 def main():
 
     # parser = argparse.ArgumentParser(description="an example program")
@@ -107,36 +134,17 @@ def main():
     # parser.add_argument("--add", required=False, nargs=1, type=str)
     # parser.add_argument("--mappings", required=False, nargs=1, type=str)
     # args = parser.parse_args()
-    dg = Digraph()
-    dg.attr("graph", rankdir="LR")
 
     files = ["file1.sql"]
 
-    for file, query, query_type in query_gen(files):
+    for query_file, query, query_type in query_gen(files):
 
         try:
             from_tables, to_table = extract_tables(query)
         except:
             continue
 
-        dg.node(
-            to_table,
-            shape="cylinder",
-            color="white" if query_type == QueryType.SELECT else "black",
-        )
-        dg.node(file, shape="note")
-        dg.edge(
-            tail_name=file,
-            head_name=to_table,
-            color=select_color(query_type),
-        )
-        for from_table in from_tables:
-            dg.node(from_table, shape="cylinder")
-            dg.edge(
-                tail_name=from_table,
-                head_name=file,
-                color=select_color(query_type),
-            )
+        draw_diagram(from_tables, to_table, query_type, query_file)
 
     dg.render("./dgraph", view=True, format="svg")
 
