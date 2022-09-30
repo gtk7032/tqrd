@@ -18,14 +18,19 @@ class QueryType(Flag):
 
 
 def is_query(sentence: str) -> bool:
-    return re.search(
-        r"(WITH|DELETE|UPDATE|INSERT)",
-        sentence,
-        flags=re.DOTALL | re.IGNORECASE,
-    ) is not None and re.search(
-        r"SELECT.*FROM",
-        sentence,
-        flags=re.DOTALL | re.IGNORECASE,
+    return (
+        re.search(
+            r"(WITH|DELETE|UPDATE|INSERT)",
+            sentence,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        is not None
+        and re.search(
+            r"SELECT.*FROM",
+            sentence,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        is not None
     )
 
 
