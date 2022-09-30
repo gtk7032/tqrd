@@ -19,10 +19,10 @@ class QueryType(Flag):
 
 def is_query(sentence: str) -> bool:
     return re.search(
-        r"(WITH|DELETE|UPDATE|INSERT)",
+        r"(DELETE|UPDATE|INSERT)",
         sentence,
         flags=re.DOTALL | re.IGNORECASE,
-    ) and re.search(
+    ) or re.search(
         r"SELECT.*FROM",
         sentence,
         flags=re.DOTALL | re.IGNORECASE,
@@ -41,7 +41,6 @@ def remove_impurities(impure_query: str) -> str:
 def extract_tables(query: str) -> Tuple[List[str], str]:
     pure_query = remove_impurities(query)
     tables = Parser(pure_query).tables
-    print(tables)
     if guess_query_type(pure_query) == QueryType.SELECT:
         return tables, ""
     elif len(tables) == 0:
