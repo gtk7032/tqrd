@@ -3,8 +3,7 @@ import csv
 import os
 import re
 from enum import Flag, auto
-from logging import exception
-from typing import List, Tuple
+from typing import Generator, List, Tuple
 
 from graphviz import Digraph
 from sql_metadata import Parser
@@ -88,19 +87,10 @@ def select_color(query_type: QueryType) -> str:
 #             query_type = row[3]
 
 
-def main():
-
-    parser = argparse.ArgumentParser(description="an example program")
-    parser.add_argument("--files", required=True, nargs="*", type=str)
-    parser.add_argument("--add", required=False, nargs=1, type=str)
-    parser.add_argument("--mappings", required=False, nargs=1, type=str)
-    args = parser.parse_args()
-    dg = Digraph()
-    dg.attr("graph", rankdir="LR")
-
-    for sqlfile in args.files:
-        procedure = os.path.splitext(os.path.basename(sqlfile))[0]
-        with open(sqlfile, "r", encoding="utf-8") as f:
+def query_gen(files: List[str]) -> Generator[Tuple[str, str, QueryType], None, None]:
+    for file in files:
+        basename = os.path.splitext(os.path.basename(file))[0]
+        with open(file, "r", encoding="utf-8") as f:
             queries = f.read().split(";")
             for query in queries:
                 if not is_query(query):
@@ -108,28 +98,46 @@ def main():
                 query_type = guess_query_type(query)
                 if query_type == QueryType.UNKNOWN:
                     continue
-                try:
-                    from_tables, to_table = extract_tables(query)
-                except:
-                    continue
-                dg.node(
-                    to_table,
-                    shape="cylinder",
-                    color="white" if query_type == QueryType.SELECT else "black",
-                )
-                dg.node(procedure, shape="note")
-                dg.edge(
-                    tail_name=procedure,
-                    head_name=to_table,
-                    color=select_color(query_type),
-                )
-                for from_table in from_tables:
-                    dg.node(from_table, shape="cylinder")
-                    dg.edge(
-                        tail_name=from_table,
-                        head_name=procedure,
-                        color=select_color(query_type),
-                    )
+                yield basename, query, query_type
+
+
+def main():
+
+    # parser = argparse.ArgumentParser(description="an example program")
+    # parser.add_argument("--files", required=True, nargs="*", type=str)
+    # parser.add_argument("--add", required=False, nargs=1, type=str)
+    # parser.add_argument("--mappings", required=False, nargs=1, type=str)
+    # args = parser.parse_args()
+    dg = Digraph()
+    dg.attr("graph", rankdir="LR")
+
+    files = ["file1.sql"]
+
+    for file, query, query_type in query_gen(files):
+
+        try:
+            from_tables, to_table = extract_tables(query)
+        except:
+            continue
+
+        dg.node(
+            to_table,
+            shape="cylinder",
+            color="white" if query_type == QueryType.SELECT else "black",
+        )
+        dg.node(file, shape="note")
+        dg.edge(
+            tail_name=file,
+            head_name=to_table,
+            color=select_color(query_type),
+        )
+        for from_table in from_tables:
+            dg.node(from_table, shape="cylinder")
+            dg.edge(
+                tail_name=from_table,
+                head_name=file,
+                color=select_color(query_type),
+            )
 
     dg.render("./dgraph", view=True, format="svg")
 
