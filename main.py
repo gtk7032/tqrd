@@ -3,7 +3,8 @@ import csv
 import os
 import re
 from enum import Flag, auto
-from typing import Tuple
+from logging import exception
+from typing import List, Tuple
 
 from graphviz import Digraph
 from sql_metadata import Parser
@@ -14,6 +15,19 @@ class QueryType(Flag):
     DELETE = auto()
     UPDATE = auto()
     INSERT = auto()
+    UNKNOWN = auto()
+
+
+def is_query(sentence: str) -> bool:
+    return re.search(
+        r"(WITH|DELETE|UPDATE|INSERT)",
+        sentence,
+        flags=re.DOTALL | re.IGNORECASE,
+    ) is not None and re.search(
+        r"SELECT.*FROM",
+        sentence,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
 
 
 def remove_impurities(impure_query: str) -> str:
@@ -25,9 +39,10 @@ def remove_impurities(impure_query: str) -> str:
     return result.group(0) if result is not None else ""
 
 
-def extract_tables(query: str) -> Tuple[list[str], str]:
+def extract_tables(query: str) -> Tuple[List[str], str]:
     pure_query = remove_impurities(query)
     tables = Parser(pure_query).tables
+    print(tables)
     if guess_query_type(pure_query) == QueryType.SELECT:
         return tables, ""
     elif len(tables) == 0:
@@ -45,8 +60,10 @@ def guess_query_type(query: str) -> QueryType:
         return QueryType.UPDATE
     elif re.search(r"INSERT", query, flags=re.DOTALL | re.IGNORECASE) is not None:
         return QueryType.INSERT
-    else:
+    elif re.search(r"SELECT", query, flags=re.DOTALL | re.IGNORECASE) is not None:
         return QueryType.SELECT
+    else:
+        return QueryType.UNKNOWN
 
 
 def select_color(query_type: QueryType) -> str:
@@ -85,11 +102,16 @@ def main():
         procedure = os.path.splitext(os.path.basename(sqlfile))[0]
         with open(sqlfile, "r", encoding="utf-8") as f:
             queries = f.read().split(";")
-            del queries[-1]  # empty
-
             for query in queries:
+                if not is_query(query):
+                    continue
                 query_type = guess_query_type(query)
-                from_tables, to_table = extract_tables(query)
+                if query_type == QueryType.UNKNOWN:
+                    continue
+                try:
+                    from_tables, to_table = extract_tables(query)
+                except:
+                    continue
                 dg.node(
                     to_table,
                     shape="cylinder",
