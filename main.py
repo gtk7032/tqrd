@@ -129,15 +129,15 @@ def read_mapping_file(file: str) -> dict[str, str]:
         with open(file, "r", encoding="utf-8") as f:
             reader = csv.reader(f)
             for r in reader:
-                map[r[0]] = r[1]
+                map[r[0].upper()] = r[1]
     finally:
         return map
 
 
 def map_tables(frms: list[str], to: str, map: dict[str, str]) -> tuple[list[str], str]:
     return (
-        [frm + "\n" + map.get(frm, "") for frm in frms],
-        to + "\n" + map.get(to, ""),
+        [frm + "\n" + map.get(frm.upper(), "") for frm in frms],
+        to + "\n" + map.get(to.upper(), ""),
     )
 
 
