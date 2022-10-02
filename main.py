@@ -3,7 +3,7 @@ import csv
 import os
 import re
 from enum import Flag, auto
-from typing import Generator, List, Tuple
+from typing import Generator, Tuple
 
 from graphviz import Digraph
 from sql_metadata import Parser
@@ -38,7 +38,7 @@ def remove_impurities(impure_query: str) -> str:
     return result.group(0) if result is not None else ""
 
 
-def extract_tables(query: str) -> Tuple[List[str], str]:
+def extract_tables(query: str) -> Tuple[list[str], str]:
     pure_query = remove_impurities(query)
     tables = Parser(pure_query).tables
     if guess_query_type(pure_query) == QueryType.SELECT:
@@ -86,7 +86,7 @@ def select_color(query_type: QueryType) -> str:
 #             query_type = row[3]
 
 
-def query_gen(files: List[str]) -> Generator[Tuple[str, str, QueryType], None, None]:
+def query_gen(files: list[str]) -> Generator[Tuple[str, str, QueryType], None, None]:
     for file in files:
         basename = os.path.splitext(os.path.basename(file))[0]
         with open(file, "r", encoding="utf-8") as f:
@@ -101,7 +101,7 @@ def query_gen(files: List[str]) -> Generator[Tuple[str, str, QueryType], None, N
 
 
 def draw_diagram(
-    from_tables: List[str], to_table: str, query_type: QueryType, query_file: str
+    from_tables: list[str], to_table: str, query_type: QueryType, query_file: str
 ):
     dg.node(
         to_table,
@@ -123,28 +123,60 @@ def draw_diagram(
         )
 
 
+def read_mapping_file(file: str) -> dict[str, str]:
+    map = {}
+    try:
+        with open(file, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            for r in reader:
+                map[r[0]] = r[1]
+    finally:
+        return map
+
+
+def map_tables(frms: list[str], to: str, map: dict[str, str]) -> tuple[list[str], str]:
+    return (
+        [frm + "\n" + map.get(frm, "") for frm in frms],
+        to + "\n" + map.get(to, ""),
+    )
+
+
+def get_queryfiles(dir: str) -> list[str]:
+    queryfiles: list[str] = []
+    for current, _, subfiles in os.walk(dir):
+        queryfiles.extend(
+            os.path.join(current, subfile)
+            for subfile in subfiles
+            if os.path.splitext(subfile)[1] in [".sh", ".sql"]
+        )
+    return queryfiles
+
+
 dg = Digraph()
 dg.attr("graph", rankdir="LR")
 
 
 def main():
 
-    # parser = argparse.ArgumentParser(description="an example program")
-    # parser.add_argument("--files", required=True, nargs="*", type=str)
-    # parser.add_argument("--add", required=False, nargs=1, type=str)
-    # parser.add_argument("--mappings", required=False, nargs=1, type=str)
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser(
+        description="draw Table and Query Relationship Diagram"
+    )
+    parser.add_argument("--querydir", required=False, nargs=1, type=str)
+    parser.add_argument("--mappings", required=False, nargs=1, type=str)
+    parser.add_argument("--relations", required=False, nargs=1, type=str)
+    args = parser.parse_args()
 
-    files = ["file1.sql"]
+    mappings = read_mapping_file(args.mappings[0])
 
-    for query_file, query, query_type in query_gen(files):
+    for query_file, query, query_type in query_gen(get_queryfiles(args.querydir[0])):
 
         try:
-            from_tables, to_table = extract_tables(query)
+            frms, to = extract_tables(query)
+            frms, to = map_tables(frms, to, mappings)
         except:
             continue
 
-        draw_diagram(from_tables, to_table, query_type, query_file)
+        draw_diagram(frms, to, query_type, query_file)
 
     dg.render("./dgraph", view=True, format="svg")
 
