@@ -1,4 +1,3 @@
-import argparse
 import csv
 import os
 import re
@@ -10,11 +9,29 @@ from sql_metadata import Parser
 
 
 class QueryType(Flag):
-    SELECT = auto()
-    DELETE = auto()
-    UPDATE = auto()
-    INSERT = auto()
-    UNKNOWN = auto()
+    SELECT = (auto(), "SELECT")
+    DELETE = (auto(), "DELETE")
+    UPDATE = (auto(), "UPDATE")
+    INSERT = (auto(), "INSERT")
+    UNKNOWN = (auto(), "UNKNOWN")
+
+    def __init__(self, id, val: str):
+        self.id = id
+        self.val = val
+
+    @classmethod
+    def members_as_list(cls):
+        return [*cls.__members__.values()]
+
+    @classmethod
+    def get_by_val(cls, val: str):
+        for m in cls.members_as_list():
+            if m.val == val:
+                return m
+
+
+class TableExtractionError(Exception):
+    pass
 
 
 def is_query(sentence: str) -> bool:
@@ -35,12 +52,15 @@ def remove_impurities(impure_query: str) -> str:
         impure_query,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    return result.group(0) if result is not None else ""
+    return result.group(0) if result else ""
 
 
 def extract_tables(query: str) -> Tuple[list[str], str]:
     pure_query = remove_impurities(query)
-    tables = Parser(pure_query).tables
+    try:
+        tables = Parser(pure_query).tables
+    except:
+        raise TableExtractionError("TableExtractionError")
     if guess_query_type(pure_query) == QueryType.SELECT:
         return tables, ""
     elif len(tables) == 0:
@@ -52,13 +72,13 @@ def extract_tables(query: str) -> Tuple[list[str], str]:
 
 
 def guess_query_type(query: str) -> QueryType:
-    if re.search(r"DELETE", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+    if re.search(r"DELETE", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.DELETE
-    elif re.search(r"UPDATE", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+    elif re.search(r"UPDATE", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.UPDATE
-    elif re.search(r"INSERT", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+    elif re.search(r"INSERT", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.INSERT
-    elif re.search(r"SELECT", query, flags=re.DOTALL | re.IGNORECASE) is not None:
+    elif re.search(r"SELECT", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.SELECT
     else:
         return QueryType.UNKNOWN
@@ -71,19 +91,10 @@ def select_color(query_type: QueryType) -> str:
         return "#d95f02"
     elif query_type == QueryType.INSERT:
         return "#e6ab02"
-    else:
+    elif query_type == QueryType.SELECT:
         return "#e7298a"
-
-
-# def add_graph(path: str, dg: Digraph):
-
-#     with open(path, "r", encoding="utf-8") as f:
-#         rows = csv.reader(f)
-#         for row in rows:
-#             from_table = row[0]
-#             to_table = row[1]
-#             arrow_name = row[2]
-#             query_type = row[3]
+    else:
+        return "#ffffff"
 
 
 def query_gen(files: list[str]) -> Generator[Tuple[str, str, QueryType], None, None]:
@@ -123,7 +134,7 @@ def draw_diagram(
         )
 
 
-def read_mapping_file(file: str) -> dict[str, str]:
+def read_mapping(file: str) -> dict[str, str]:
     map = {}
     try:
         with open(file, "r", encoding="utf-8") as f:
@@ -152,31 +163,38 @@ def get_queryfiles(dir: str) -> list[str]:
     return queryfiles
 
 
+def read_relations(
+    path: str,
+) -> Generator[Tuple[list[str], str, str, QueryType], None, None]:
+    with open(path, "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        for r in reader:
+            yield r[0].split(":"), r[1], r[2], QueryType.get_by_val(r[3].upper())
+
+
 dg = Digraph()
 dg.attr("graph", rankdir="LR")
 
 
 def main():
 
-    parser = argparse.ArgumentParser(
-        description="draw Table and Query Relationship Diagram"
-    )
-    parser.add_argument("--querydir", required=False, nargs=1, type=str)
-    parser.add_argument("--mappings", required=False, nargs=1, type=str)
-    parser.add_argument("--relations", required=False, nargs=1, type=str)
-    args = parser.parse_args()
+    mappings = read_mapping(os.path.join("resources", "mappings.csv"))
 
-    mappings = read_mapping_file(args.mappings[0])
-
-    for query_file, query, query_type in query_gen(get_queryfiles(args.querydir[0])):
-
+    for query_file, query, query_type in query_gen(
+        get_queryfiles(os.path.join("resources", "queries"))
+    ):
         try:
             frms, to = extract_tables(query)
-            frms, to = map_tables(frms, to, mappings)
-        except:
+        except TableExtractionError:
             continue
-
+        frms, to = map_tables(frms, to, mappings)
         draw_diagram(frms, to, query_type, query_file)
+
+    for frms, to, query, type in read_relations(
+        os.path.join("resources", "relations.csv")
+    ):
+        frms, to = map_tables(frms, to, mappings)
+        draw_diagram(frms, to, type, query)
 
     dg.render("./dgraph", view=True, format="svg")
 
