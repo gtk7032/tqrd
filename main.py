@@ -67,10 +67,12 @@ def extract_tables(query: str) -> Tuple[list[str], str]:
         tables = Parser(pure_query).tables
     except:
         raise TableExtractionError("TableExtractionError")
+
     if guess_query_type(pure_query) == QueryType.SELECT:
-        return tables, ""
-    elif len(tables) == 0:
-        raise TableExtractionError("TableExtractionError")
+        if len(tables) == 0:
+            raise TableExtractionError("TableExtractionError")
+        else:
+            return tables, ""
     elif len(tables) == 1:
         return tables[0], tables[0]
     else:
