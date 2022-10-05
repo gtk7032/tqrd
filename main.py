@@ -70,7 +70,7 @@ def extract_tables(query: str) -> Tuple[list[str], str]:
     if guess_query_type(pure_query) == QueryType.SELECT:
         return tables, ""
     elif len(tables) == 0:
-        return [], ""
+        raise TableExtractionError("TableExtractionError")
     elif len(tables) == 1:
         return tables[0], tables[0]
     else:
