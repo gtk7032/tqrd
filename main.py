@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import csv
 import os
 import re
@@ -20,14 +22,15 @@ class QueryType(Flag):
         self.val = val
 
     @classmethod
-    def members_as_list(cls):
+    def members_as_list(cls) -> list[QueryType]:
         return [*cls.__members__.values()]
 
     @classmethod
-    def get_by_val(cls, val: str):
+    def get_by_val(cls, val: str) -> QueryType:
         for m in cls.members_as_list():
             if m.val == val:
                 return m
+        return QueryType.UNKNOWN
 
 
 class TableExtractionError(Exception):
@@ -35,24 +38,27 @@ class TableExtractionError(Exception):
 
 
 def is_query(sentence: str) -> bool:
-    return re.search(
-        r"(DELETE|UPDATE|INSERT)",
-        sentence,
-        flags=re.DOTALL | re.IGNORECASE,
-    ) or re.search(
-        r"SELECT.*FROM",
-        sentence,
-        flags=re.DOTALL | re.IGNORECASE,
+    return bool(
+        re.search(
+            "(DELETE|UPDATE|INSERT)",
+            sentence,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+        or re.search(
+            "SELECT.*FROM",
+            sentence,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
     )
 
 
 def remove_impurities(impure_query: str) -> str:
     result = re.search(
-        r"(WITH|SELECT|DELETE|UPDATE|INSERT).*.$",
+        "(WITH|SELECT|DELETE|UPDATE|INSERT).*.$",
         impure_query,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    return result.group(0) if result else ""
+    return result.group(0) if result is not None else ""
 
 
 def extract_tables(query: str) -> Tuple[list[str], str]:
@@ -72,13 +78,13 @@ def extract_tables(query: str) -> Tuple[list[str], str]:
 
 
 def guess_query_type(query: str) -> QueryType:
-    if re.search(r"DELETE", query, flags=re.DOTALL | re.IGNORECASE):
+    if re.search("DELETE", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.DELETE
-    elif re.search(r"UPDATE", query, flags=re.DOTALL | re.IGNORECASE):
+    elif re.search("UPDATE", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.UPDATE
-    elif re.search(r"INSERT", query, flags=re.DOTALL | re.IGNORECASE):
+    elif re.search("INSERT", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.INSERT
-    elif re.search(r"SELECT", query, flags=re.DOTALL | re.IGNORECASE):
+    elif re.search("SELECT", query, flags=re.DOTALL | re.IGNORECASE):
         return QueryType.SELECT
     else:
         return QueryType.UNKNOWN
@@ -196,7 +202,7 @@ def main():
         frms, to = map_tables(frms, to, mappings)
         draw_diagram(frms, to, type, query)
 
-    dg.render("./dgraph", view=True, format="svg")
+    dg.render("./dgraph", view=False, format="svg", cleanup=True)
 
 
 if __name__ == "__main__":
