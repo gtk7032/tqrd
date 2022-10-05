@@ -1,2 +1,2 @@
 # tqrd
-Table and Query Relationship Diagram
+draw Table and Query Relationship Diagram
