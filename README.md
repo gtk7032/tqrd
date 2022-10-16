@@ -1,2 +1,2 @@
 # tqrd
-draw Table and Query Relationship Diagram
+a tool to draw relationship diagrams between tables and querys
