@@ -1,7 +1,7 @@
-FROM python:3.9-alpine
+FROM python:3.9-slim-buster
 USER root
 
-RUN apk --update add graphviz 
+RUN apt-get update ; apt-get install -y graphviz
 COPY ./src /root
 RUN mkdir -p /root/resources
 WORKDIR /root
