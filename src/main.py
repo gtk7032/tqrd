@@ -180,7 +180,7 @@ def read_relations(
             yield r[0].split(":"), r[1], r[2], QueryType.get_by_val(r[3].upper())
 
 
-def write_notparsable(not_parsable: list[dict[str, str]]):
+def unparsable(not_parsable: list[dict[str, str]]):
     with open(os.path.join("output", "not_parsable.csv"), "w", encoding="utf-8") as f:
         writer = csv.writer(f)
         for np in not_parsable:
@@ -192,7 +192,7 @@ dg.attr("graph", rankdir="LR")
 
 if __name__ == "__main__":
 
-    not_parsable: list[dict[str, str]] = []
+    unparsable: list[dict[str, str]] = []
     mappings = read_mapping(os.path.join("resources", "mappings.csv"))
 
     for query_file, query, query_type in query_gen(
@@ -201,12 +201,12 @@ if __name__ == "__main__":
         try:
             frms, to = extract_tables(query)
         except TableExtractionError:
-            not_parsable.append({"file": query_file, "query": query})
+            unparsable.append({"file": query_file, "query": query})
             continue
         frms, to = map_tables(frms, to, mappings)
         draw_diagram(frms, to, query_type, query_file)
 
-    write_notparsable(not_parsable)
+    unparsable(unparsable)
 
     for frms, to, query, type in read_relations(
         os.path.join("resources", "relations.csv")
