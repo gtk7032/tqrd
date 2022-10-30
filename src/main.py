@@ -180,11 +180,13 @@ def read_relations(
             yield r[0].split(":"), r[1], r[2], QueryType.get_by_val(r[3].upper())
 
 
-def write_unparsable(not_parsable: list[dict[str, str]]):
-    with open(os.path.join("output", "not_parsable.csv"), "w", encoding="utf-8") as f:
+def write_unparsable(unparsable: list[dict[str, str]]):
+    with open(
+        os.path.join("output", "unparsable_queries.csv"), "w", encoding="utf-8"
+    ) as f:
         writer = csv.writer(f)
-        for np in not_parsable:
-            writer.writerow([np["file"], np["query"].replace("\n", "")])
+        for up in unparsable:
+            writer.writerow([up["file"], up["query"].replace("\n", "")])
 
 
 dg = Digraph()
