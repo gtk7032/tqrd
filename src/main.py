@@ -180,7 +180,7 @@ def read_relations(
             yield r[0].split(":"), r[1], r[2], QueryType.get_by_val(r[3].upper())
 
 
-def unparsable(not_parsable: list[dict[str, str]]):
+def write_unparsable(not_parsable: list[dict[str, str]]):
     with open(os.path.join("output", "not_parsable.csv"), "w", encoding="utf-8") as f:
         writer = csv.writer(f)
         for np in not_parsable:
@@ -206,7 +206,7 @@ if __name__ == "__main__":
         frms, to = map_tables(frms, to, mappings)
         draw_diagram(frms, to, query_type, query_file)
 
-    unparsable(unparsable)
+    write_unparsable(unparsable)
 
     for frms, to, query, type in read_relations(
         os.path.join("resources", "relations.csv")
