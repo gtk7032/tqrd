@@ -58,7 +58,7 @@ def remove_impurities(impure_query: str) -> str:
         impure_query,
         flags=re.DOTALL | re.IGNORECASE,
     )
-    return result.group(0) if result is not None else ""
+    return result.group(0) if result else ""
 
 
 def extract_tables(query: str) -> Tuple[list[str], str]:
@@ -143,13 +143,13 @@ def draw_diagram(
 
 
 def read_mapping(file: str) -> dict[str, str]:
-    map = {}
-    try:
-        with open(file, "r", encoding="utf-8") as f:
-            reader = csv.reader(f)
-            for r in reader:
-                map[r[0].upper()] = r[1]
-    finally:
+    map: dict[str, str] = {}
+    if not file:
+        return map
+    with open(file, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            map[r["table"].upper()] = r["label"]
         return map
 
 
@@ -166,7 +166,7 @@ def get_queryfiles(dir: str) -> list[str]:
         queryfiles.extend(
             os.path.join(current, subfile)
             for subfile in subfiles
-            if os.path.splitext(subfile)[1] in [".sh", ".sql"]
+            if os.path.splitext(subfile)[1]
         )
     return queryfiles
 
@@ -175,9 +175,11 @@ def read_relations(
     path: str,
 ) -> Generator[Tuple[list[str], str, str, QueryType], None, None]:
     with open(path, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
+        reader = csv.DictReader(f)
         for r in reader:
-            yield r[0].split(":"), r[1], r[2], QueryType.get_by_val(r[3].upper())
+            yield r["from"].split(":"), r["to"], r["query"], QueryType.get_by_val(
+                r["type"].upper()
+            )
 
 
 def write_unparsable(unparsable: list[dict[str, str]]):
