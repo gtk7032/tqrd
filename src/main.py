@@ -148,7 +148,7 @@ def write_unparsable(unparsable: list[dict[str, str]]):
             writer.writerow([up["file"], up["query"].replace("\n", "")])
 
 
-def should_ignore(query_type: QueryType) -> bool:
+def should_ignore(query_type: QueryType, tables: list[str]) -> bool:
     return bool(
         (query_type == QueryType.SELECT and len(tables) == 0)
         or query_type
@@ -173,7 +173,7 @@ if __name__ == "__main__":
             unparsable.append({"file": query_file, "query": query})
             continue
 
-        if should_ignore(query_type):
+        if should_ignore(query_type, tables):
             continue
 
         frms, to = crassify_tables(tables, query_type)
