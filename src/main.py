@@ -3,50 +3,21 @@ from __future__ import annotations
 import csv
 import os
 import re
-from enum import Flag, auto
 from typing import Generator, Tuple
 
 from graphviz import Digraph
-from sql_metadata import Parser
+from sql_metadata import Parser, QueryType
 
 
-class QueryType(Flag):
-    SELECT = (auto(), "SELECT")
-    DELETE = (auto(), "DELETE")
-    UPDATE = (auto(), "UPDATE")
-    INSERT = (auto(), "INSERT")
-    UNKNOWN = (auto(), "UNKNOWN")
-
-    def __init__(self, id, val: str):
-        self.id = id
-        self.val = val
-
-    @classmethod
-    def members_as_list(cls) -> list[QueryType]:
-        return [*cls.__members__.values()]
-
-    @classmethod
-    def get_by_val(cls, val: str) -> QueryType:
-        for m in cls.members_as_list():
-            if m.val == val:
-                return m
-        return QueryType.UNKNOWN
-
-
-class TableExtractionError(Exception):
+class QueryParseError(Exception):
     pass
 
 
-def is_query(sentence: str) -> bool:
+def contains_query(string: str) -> bool:
     return bool(
         re.search(
-            "(DELETE|UPDATE|INSERT)",
-            sentence,
-            flags=re.DOTALL | re.IGNORECASE,
-        )
-        or re.search(
-            "SELECT.*FROM",
-            sentence,
+            "(SELECT|DELETE|UPDATE|INSERT)",
+            string,
             flags=re.DOTALL | re.IGNORECASE,
         )
     )
@@ -61,35 +32,13 @@ def remove_impurities(impure_query: str) -> str:
     return result.group(0) if result else ""
 
 
-def extract_tables(query: str) -> Tuple[list[str], str]:
-    pure_query = remove_impurities(query)
-    try:
-        tables = Parser(pure_query).tables
-    except:
-        raise TableExtractionError("TableExtractionError")
-
-    if guess_query_type(pure_query) == QueryType.SELECT:
-        if len(tables) == 0:
-            raise TableExtractionError("TableExtractionError")
-        else:
-            return tables, ""
+def crassify_tables(tables: list[str], query_type: QueryType) -> Tuple[list[str], str]:
+    if query_type == QueryType.SELECT:
+        return tables, ""
     elif len(tables) == 1:
-        return tables[0], tables[0]
+        return [tables[0]], tables[0]
     else:
         return tables[1:], tables[0]
-
-
-def guess_query_type(query: str) -> QueryType:
-    if re.search("DELETE", query, flags=re.DOTALL | re.IGNORECASE):
-        return QueryType.DELETE
-    elif re.search("UPDATE", query, flags=re.DOTALL | re.IGNORECASE):
-        return QueryType.UPDATE
-    elif re.search("INSERT", query, flags=re.DOTALL | re.IGNORECASE):
-        return QueryType.INSERT
-    elif re.search("SELECT", query, flags=re.DOTALL | re.IGNORECASE):
-        return QueryType.SELECT
-    else:
-        return QueryType.UNKNOWN
 
 
 def select_color(query_type: QueryType) -> str:
@@ -105,18 +54,26 @@ def select_color(query_type: QueryType) -> str:
         return "#ffffff"
 
 
-def query_gen(files: list[str]) -> Generator[Tuple[str, str, QueryType], None, None]:
+def query_gen(files: list[str]) -> Generator[Tuple[str, str], None, None]:
     for file in files:
         basename = os.path.splitext(os.path.basename(file))[0]
         with open(file, "r", encoding="utf-8") as f:
-            queries = f.read().split(";")
-            for query in queries:
-                if not is_query(query):
+            strings = f.read().split(";")
+            for string in strings:
+                if not contains_query(string):
                     continue
-                query_type = guess_query_type(query)
-                if query_type == QueryType.UNKNOWN:
-                    continue
-                yield basename, query, query_type
+                pure_query = remove_impurities(string)
+                yield basename, pure_query
+
+
+def parse_query(query: str) -> Tuple[QueryType, list[str]]:
+    parser = Parser(query)
+    try:
+        query_type = parser.query_type
+        tables = parser.tables
+    except ValueError:
+        raise QueryParseError("QueryParseError")
+    return query_type, tables
 
 
 def draw_diagram(
@@ -177,7 +134,7 @@ def read_relations(
     with open(path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
-            yield r["from"].split(":"), r["to"], r["query"], QueryType.get_by_val(
+            yield r["from"].split(":"), r["to"], r["query"], QueryType(
                 r["type"].upper()
             )
 
@@ -191,6 +148,14 @@ def write_unparsable(unparsable: list[dict[str, str]]):
             writer.writerow([up["file"], up["query"].replace("\n", "")])
 
 
+def should_ignore(query_type: QueryType) -> bool:
+    return bool(
+        (query_type == QueryType.SELECT and len(tables) == 0)
+        or query_type
+        not in (QueryType.SELECT, QueryType.UPDATE, QueryType.INSERT, QueryType.DELETE)
+    )
+
+
 dg = Digraph()
 dg.attr("graph", rankdir="LR")
 
@@ -199,14 +164,19 @@ if __name__ == "__main__":
     unparsable: list[dict[str, str]] = []
     mappings = read_mapping(os.path.join("resources", "mappings.csv"))
 
-    for query_file, query, query_type in query_gen(
+    for query_file, query in query_gen(
         get_queryfiles(os.path.join("resources", "queries"))
     ):
         try:
-            frms, to = extract_tables(query)
-        except TableExtractionError:
+            query_type, tables = parse_query(query)
+        except QueryParseError:
             unparsable.append({"file": query_file, "query": query})
             continue
+
+        if should_ignore(query_type):
+            continue
+
+        frms, to = crassify_tables(tables, query_type)
         frms, to = map_tables(frms, to, mappings)
         draw_diagram(frms, to, query_type, query_file)
 
