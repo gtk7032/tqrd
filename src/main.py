@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import os
 import re
+import sys
 from typing import Generator, Tuple
 
 from graphviz import Digraph
@@ -148,18 +149,40 @@ def write_unparsable(unparsable: list[dict[str, str]]):
             writer.writerow([up["file"], up["query"].replace("\n", "")])
 
 
-def should_ignore(query_type: QueryType, tables: list[str]) -> bool:
+def should_ignore(
+    query_type: QueryType, tables: list[str], display_types: list[QueryType]
+) -> bool:
     return bool(
         (query_type == QueryType.SELECT and len(tables) == 0)
-        or query_type
-        not in (QueryType.SELECT, QueryType.UPDATE, QueryType.INSERT, QueryType.DELETE)
+        or query_type not in display_types
     )
+
+
+def parse_display_types(display_types: str) -> list[QueryType]:
+
+    if display_types == "":
+        return [QueryType.SELECT, QueryType.UPDATE, QueryType.INSERT, QueryType.DELETE]
+
+    dtp: list[QueryType] = []
+    for type in list(display_types):
+        if type in ["i", "I"]:
+            dtp.append(QueryType.INSERT)
+        elif type in ["d", "D"]:
+            dtp.append(QueryType.DELETE)
+        elif type in ["u", "U"]:
+            dtp.append(QueryType.UPDATE)
+        elif type in ["s", "S"]:
+            dtp.append(QueryType.SELECT)
+    return dtp
 
 
 dg = Digraph()
 dg.attr("graph", rankdir="LR")
 
 if __name__ == "__main__":
+
+    args = sys.argv
+    disptypes = parse_display_types(args[1] if len(args) == 2 else "")
 
     unparsable: list[dict[str, str]] = []
     mappings = read_mapping(os.path.join("resources", "mappings.csv"))
@@ -173,7 +196,7 @@ if __name__ == "__main__":
             unparsable.append({"file": query_file, "query": query})
             continue
 
-        if should_ignore(query_type, tables):
+        if should_ignore(query_type, tables, disptypes):
             continue
 
         frms, to = crassify_tables(tables, query_type)
@@ -182,10 +205,12 @@ if __name__ == "__main__":
 
     write_unparsable(unparsable)
 
-    for frms, to, query, type in read_relations(
+    for frms, to, query, query_type in read_relations(
         os.path.join("resources", "relations.csv")
     ):
+        if should_ignore(query_type, frms + [to], disptypes):
+            continue
         frms, to = map_tables(frms, to, mappings)
-        draw_diagram(frms, to, type, query)
+        draw_diagram(frms, to, query_type, query)
 
     dg.render(os.path.join("output", "diagram"), view=False, format="svg", cleanup=True)
