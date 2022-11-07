@@ -153,14 +153,14 @@ def should_ignore(
     query_type: QueryType, tables: list[str], display_types: list[QueryType]
 ) -> bool:
     return bool(
-        (query_type == QueryType.SELECT and len(tables) == 0)
+        (query_type == QueryType.SELECT and not len(tables))
         or query_type not in display_types
     )
 
 
 def parse_display_types(display_types: str) -> list[QueryType]:
 
-    if display_types == "":
+    if not display_types:
         return [QueryType.SELECT, QueryType.UPDATE, QueryType.INSERT, QueryType.DELETE]
 
     dtp: list[QueryType] = []
