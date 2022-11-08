@@ -1,6 +1,7 @@
 version: '3'
 services:
   python3:
+    image: tqrd
     restart: always
     build: .
     container_name: 'tqrd'
